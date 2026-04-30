@@ -26,7 +26,7 @@ if not check_password():
 # --- 2. CONFIG & CONNECTIONS ---
 st.set_page_config(page_title="FIN-CORE AI", layout="wide")
 genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
-model = genai.GenerativeModel('gemini-1.5-flash')
+model = genai.GenerativeModel('gemini-flash-latest')
 conn = st.connection("supabase", type=SupabaseConnection)
 
 user_key = st.session_state["user_key"]
