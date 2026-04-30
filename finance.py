@@ -9,23 +9,35 @@ from st_supabase_connection import SupabaseConnection
 # Sekarang password lo = User Key. Beda password, beda isi Vault!
 # --- 1. DYNAMIC & COMPACT SECURITY ---
 def check_password():
-    # Jika user_key belum ada, tampilkan form login
-    if "user_key" not in st.session_state:
-        # Gunakan kolom untuk membuat form-nya compact di tengah
+    # 1. CEK MASTER PASSWORD (Biar orang asing gak bisa sembarang masuk)
+    if "authenticated" not in st.session_state:
         empty1, col_login, empty2 = st.columns([1, 1, 1])
-        
         with col_login:
-            st.markdown("### 🔐 FIN-CORE Vault")
-            with st.container(border=True): # Bikin kotak border biar kelihatan kayak pop-up
-                pwd = st.text_input("Vault Key", type="password", placeholder="Enter your secret key")
-                if st.button("Unlock Access", use_container_width=True):
-                    if pwd:
-                        st.session_state["user_key"] = pwd
+            st.markdown("### 🛡️ FIN-CORE Access")
+            with st.container(border=True):
+                master_pwd = st.text_input("Master Access Code", type="password")
+                if st.button("Masuk Aplikasi", use_container_width=True):
+                    # Cek ke secrets.toml atau Secrets Cloud
+                    if master_pwd == st.secrets["APP_PASSWORD"]:
+                        st.session_state["authenticated"] = True
                         st.rerun()
                     else:
-                        st.error("Key wajib diisi!")
-            st.caption("Don't have a key? Enter any text to create a new vault.")
+                        st.error("Access Code Salah!")
         return False
+
+    # 2. CEK VAULT KEY (Multi-User Space)
+    if "user_key" not in st.session_state:
+        empty1, col_login, empty2 = st.columns([1, 1, 1])
+        with col_login:
+            st.markdown("### 🔐 Pilih Vault Anda")
+            with st.container(border=True):
+                pwd = st.text_input("Vault Key (Bebas/User)", type="password", placeholder="Contoh: riza123 atau tamu777")
+                if st.button("Buka Vault", use_container_width=True):
+                    st.session_state["user_key"] = pwd
+                    st.rerun()
+            st.caption("Gunakan key yang sama untuk melihat history Anda kembali.")
+        return False
+    
     return True
 
 if not check_password():
