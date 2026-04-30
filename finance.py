@@ -31,21 +31,6 @@ def check_password():
 if not check_password():
     st.stop()
 
-# --- TOMBOL LOGOUT DI SIDEBAR ---
-with st.sidebar:
-    st.title("🏦 VAULT MENU")
-    # Tampilkan key yang sedang aktif (disensor dikit biar keren)
-    current_key = st.session_state['user_key']
-    st.write(f"Logged in as: `{current_key[:3]}***` ✨")
-    
-    if st.button("🚪 Logout / Switch User", use_container_width=True):
-        # Hapus semua session terkait user ini
-        del st.session_state["user_key"]
-        if "df" in st.session_state: del st.session_state["df"]
-        if "analysis" in st.session_state: del st.session_state["analysis"]
-        st.rerun()
-    st.divider()
-
 # --- 2. CONFIG & CONNECTIONS ---
 st.set_page_config(page_title="FIN-CORE AI", layout="wide")
 genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
@@ -86,10 +71,18 @@ def ai_analyze_spending(current_list):
 
 # --- 4. SIDEBAR ---
 with st.sidebar:
-    st.title(f"🏦 VAULT: {user_key[:3]}***")
-    if st.button("🚪 Logout / Switch Key"):
+    st.title("🏦 VAULT MENU")
+    # Tampilkan key yang sedang aktif (disensor dikit biar keren)
+    current_key = st.session_state['user_key']
+    st.write(f"Logged in as: `{current_key[:3]}***` ✨")
+    
+    if st.button("🚪 Logout / Switch User", use_container_width=True):
+        # Hapus semua session terkait user ini
         del st.session_state["user_key"]
+        if "df" in st.session_state: del st.session_state["df"]
+        if "analysis" in st.session_state: del st.session_state["analysis"]
         st.rerun()
+    st.divider()
         
     file = st.file_uploader("Upload Mutasi", type="pdf")
     if file and st.button("🚀 Run AI Audit"):
