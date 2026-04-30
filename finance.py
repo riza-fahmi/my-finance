@@ -5,22 +5,18 @@ import json
 import google.generativeai as genai
 from st_supabase_connection import SupabaseConnection
 
-# --- 1. SECURITY CHECK ---
+# --- 1. DYNAMIC SECURITY ---
+# Sekarang password lo = User Key. Beda password, beda isi Vault!
 def check_password():
-    def password_entered():
-        # Membaca password dari secrets.toml (local) atau Secrets Cloud
-        if st.session_state["password"] == st.secrets["APP_PASSWORD"]:
-            st.session_state["password_correct"] = True
-            del st.session_state["password"]
-        else:
-            st.session_state["password_correct"] = False
-
-    if "password_correct" not in st.session_state:
-        st.text_input("Access Password", type="password", on_change=password_entered, key="password")
-        return False
-    elif not st.session_state["password_correct"]:
-        st.text_input("Access Password", type="password", on_change=password_entered, key="password")
-        st.error("Password salah.")
+    if "user_key" not in st.session_state:
+        st.title("🔐 FIN-CORE Vault Access")
+        pwd = st.text_input("Enter Vault Key / Password", type="password")
+        if st.button("Unlock Vault"):
+            if pwd:
+                st.session_state["user_key"] = pwd
+                st.rerun()
+            else:
+                st.error("Isi dulu kuncinya bos.")
         return False
     return True
 
@@ -28,104 +24,113 @@ if not check_password():
     st.stop()
 
 # --- 2. CONFIG & CONNECTIONS ---
-st.set_page_config(page_title="FIN-CORE AI VAULT", layout="wide")
-
-# Setup Gemini & Supabase dari Secrets
+st.set_page_config(page_title="FIN-CORE AI", layout="wide")
 genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
-model = genai.GenerativeModel('gemini-flash-latest')
+model = genai.GenerativeModel('gemini-1.5-flash')
 conn = st.connection("supabase", type=SupabaseConnection)
 
+user_key = st.session_state["user_key"]
 CATEGORIES = ["Income", "Food & Beverage", "Shopping", "Bills & Topup", "Transportation", "Paylater & Debt", "Housing", "Others"]
 
-# --- 3. AI CORE FUNCTIONS ---
+# --- 3. AI CORE WITH LEARNING ---
 def ai_parse_text(raw_text):
+    # Ambil "contekan" dari database biar AI belajar
+    rules = conn.table("ai_learning").select("description, correct_category").eq("user_key", user_key).execute()
+    learning_context = ""
+    if rules.data:
+        learning_context = "PENTING! User mau kategori ini khusus: " + ", ".join([f"{r['description']} -> {r['correct_category']}" for r in rules.data])
+
     prompt = f"""
-    Tugas: Ekstrak data mutasi BCA ke JSON array.
-    Kategori: {CATEGORIES}
-    Rules: Food (Warteg, Batagor, Cafe), Transport (Grab, Gojek, BBM), Shopping (Shopee, Tokped). 
-    Wajib isi Kategori, jangan kosong!
+    Tugas: Ekstrak mutasi ke JSON.
+    Context Belajar: {learning_context}
+    Kategori Wajib: {CATEGORIES}
     Format: [{{ "Date": "DD/MM", "Description": "...", "Amount": float, "Type": "Income/Expense", "Category": "..." }}]
     Teks: {raw_text}
     """
     response = model.generate_content(prompt)
-    clean_json = response.text.replace('```json', '').replace('```', '').strip()
-    return json.loads(clean_json)
+    return json.loads(response.text.replace('```json', '').replace('```', '').strip())
 
-def ai_analyze_spending(current_list, history_text=None):
+def ai_analyze_spending(current_list):
     prompt = f"""
-    Analisa spending ini: {current_list}
-    History: {history_text if history_text else 'Baru pertama kali.'}
-    Kasih analisa singkat & santai soal kebocoran dana dan saran finansial.
+    Analisa data ini: {current_list}
+    Berikan:
+    1. SKOR_KESEHATAN: (Angka 1-10)
+    2. ANALISA: (Analisa singkat ala IT Auditor santai)
+    3. SARAN: (1 saran konkret)
     """
     response = model.generate_content(prompt)
     return response.text
 
-# --- 4. SESSION STATE ---
-if "df" not in st.session_state: st.session_state.df = None
-if "analysis" not in st.session_state: st.session_state.analysis = ""
-
-# --- 5. SIDEBAR ---
+# --- 4. SIDEBAR ---
 with st.sidebar:
-    st.title("🏦 VAULT v34.0")
-    file = st.file_uploader("Upload Mutasi (PDF)", type="pdf")
+    st.title(f"🏦 VAULT: {user_key[:3]}***")
+    if st.button("🚪 Logout / Switch Key"):
+        del st.session_state["user_key"]
+        st.rerun()
+        
+    file = st.file_uploader("Upload Mutasi", type="pdf")
     if file and st.button("🚀 Run AI Audit"):
-        with st.spinner("AI Processing..."):
+        with st.spinner("AI lagi nge-grade keuangan lo..."):
             doc = fitz.open(stream=file.read(), filetype="pdf")
             raw_text = "\n".join([page.get_text() for page in doc])
-            
-            parsed_data = ai_parse_text(raw_text)
-            st.session_state.df = pd.DataFrame(parsed_data)
-            
-            # Ambil history terakhir dari Supabase
-            res = conn.table("vault_finance").select("analysis").order("id", desc=True).limit(1).execute()
-            past_msg = res.data[0]['analysis'] if res.data else None
-            st.session_state.analysis = ai_analyze_spending(parsed_data, past_msg)
+            st.session_state.df = pd.DataFrame(ai_parse_text(raw_text))
+            st.session_state.analysis = ai_analyze_spending(st.session_state.df.to_dict('records'))
 
-# --- 6. MAIN UI ---
-tab1, tab2 = st.tabs(["📊 ANALYSIS & DASHBOARD", "🗄️ VAULT RECORDS"])
+# --- 5. MAIN UI ---
+tab1, tab2 = st.tabs(["📊 DASHBOARD", "🗄️ RECORDS"])
 
 with tab1:
-    if st.session_state.df is not None:
-        df = st.session_state.df
-        st.info(st.session_state.analysis)
+    if st.session_state.get("df") is not None:
+        # Tampilan Skor ala Dashboard Pro
+        col1, col2 = st.columns([1, 3])
+        with col1:
+            # Sederhana aja buat dapetin angka skor dari teks AI
+            score = "N/A"
+            for line in st.session_state.analysis.split('\n'):
+                if "SKOR_KESEHATAN" in line: score = line.split(':')[-1].strip()
+            st.metric("Financial Health Score", f"⭐ {score}/10")
         
-        # Dashboard
-        t_in = df[df['Type'] == 'Income']['Amount'].sum()
-        t_out = df[df['Type'] == 'Expense']['Amount'].sum()
-        m1, m2, m3 = st.columns(3)
-        m1.metric("Inflow", f"Rp {t_in:,.0f}")
-        m2.metric("Outflow", f"Rp {t_out:,.0f}", delta=f"-{t_out:,.0f}", delta_color="inverse")
-        m3.metric("Net", f"Rp {t_in - t_out:,.0f}")
-        
-        st.bar_chart(df[df['Type'] == 'Expense'].groupby('Category')['Amount'].sum())
+        with col2:
+            st.info(st.session_state.analysis)
 
-        # Review Table
-        st.session_state.df = st.data_editor(df, use_container_width=True, hide_index=True)
+        # Dashboard Visual
+        st.bar_chart(st.session_state.df[st.session_state.df['Type'] == 'Expense'].groupby('Category')['Amount'].sum())
+
+        st.subheader("📝 Transaction Review")
+        st.caption("Tips: Ganti kategori yang salah, lalu klik 'Save' di bawah agar AI belajar.")
         
-        if st.button("💾 Commit to Supabase Cloud", use_container_width=True):
-            month_label = f"Periode_{st.session_state.df['Date'].iloc[0].split('/')[-1]}"
-            # Simpan ke Supabase
+        # Editor
+        edited_df = st.data_editor(st.session_state.df, use_container_width=True, hide_index=True)
+        
+        if st.button("💾 Save to Vault & Train AI", use_container_width=True):
+            # Cek mana yang berubah kategorinya buat dimasukin ke tabel belajar
+            for i, row in edited_df.iterrows():
+                old_cat = st.session_state.df.iloc[i]['Category']
+                if row['Category'] != old_cat:
+                    conn.table("ai_learning").insert({
+                        "user_key": user_key,
+                        "description": row['Description'],
+                        "correct_category": row['Category']
+                    }).execute()
+            
+            # Simpan data utama
             entry = {
-                "periode": month_label,
-                "data": st.session_state.df.to_dict('records'),
+                "user_key": user_key,
+                "periode": f"Periode_{edited_df['Date'].iloc[0]}",
+                "data": edited_df.to_dict('records'),
                 "analysis": st.session_state.analysis
             }
             conn.table("vault_finance").insert(entry).execute()
-            st.success("Data permanen di Cloud!")
-            st.balloons()
+            st.success("Data Disimpan & AI makin pinter!")
             st.session_state.df = None
             st.rerun()
     else:
-        st.info("Silakan upload PDF.")
+        st.write("Silakan upload PDF.")
 
 with tab2:
-    # Ambil semua data dari Supabase
-    res = conn.table("vault_finance").select("*").order("id", desc=True).execute()
-    if res.data:
-        for row in res.data:
-            with st.expander(f"📂 {row['periode']}"):
-                st.write(row['analysis'])
-                st.dataframe(pd.DataFrame(row['data']), use_container_width=True)
-                if st.button("🗑️ Delete", key=f"del_{row['id']}"):
-                    conn.table("vault_finance").delete().eq("id", row['id']).execute()
-                    st.rerun()
+    # Filter data HANYA milik user_key ini
+    res = conn.table("vault_finance").select("*").eq("user_key", user_key).order("id", desc=True).execute()
+    for row in res.data:
+        with st.expander(f"📂 {row['periode']}"):
+            st.write(row['analysis'])
+            st.dataframe(pd.DataFrame(row['data']), use_container_width=True)
