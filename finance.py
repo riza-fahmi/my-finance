@@ -7,21 +7,44 @@ from st_supabase_connection import SupabaseConnection
 
 # --- 1. DYNAMIC SECURITY ---
 # Sekarang password lo = User Key. Beda password, beda isi Vault!
+# --- 1. DYNAMIC & COMPACT SECURITY ---
 def check_password():
+    # Jika user_key belum ada, tampilkan form login
     if "user_key" not in st.session_state:
-        st.title("🔐 FIN-CORE Vault Access")
-        pwd = st.text_input("Enter Vault Key / Password", type="password")
-        if st.button("Unlock Vault"):
-            if pwd:
-                st.session_state["user_key"] = pwd
-                st.rerun()
-            else:
-                st.error("Isi dulu kuncinya bos.")
+        # Gunakan kolom untuk membuat form-nya compact di tengah
+        empty1, col_login, empty2 = st.columns([1, 1, 1])
+        
+        with col_login:
+            st.markdown("### 🔐 FIN-CORE Vault")
+            with st.container(border=True): # Bikin kotak border biar kelihatan kayak pop-up
+                pwd = st.text_input("Vault Key", type="password", placeholder="Enter your secret key")
+                if st.button("Unlock Access", use_container_width=True):
+                    if pwd:
+                        st.session_state["user_key"] = pwd
+                        st.rerun()
+                    else:
+                        st.error("Key wajib diisi!")
+            st.caption("Don't have a key? Enter any text to create a new vault.")
         return False
     return True
 
 if not check_password():
     st.stop()
+
+# --- TOMBOL LOGOUT DI SIDEBAR ---
+with st.sidebar:
+    st.title("🏦 VAULT MENU")
+    # Tampilkan key yang sedang aktif (disensor dikit biar keren)
+    current_key = st.session_state['user_key']
+    st.write(f"Logged in as: `{current_key[:3]}***` ✨")
+    
+    if st.button("🚪 Logout / Switch User", use_container_width=True):
+        # Hapus semua session terkait user ini
+        del st.session_state["user_key"]
+        if "df" in st.session_state: del st.session_state["df"]
+        if "analysis" in st.session_state: del st.session_state["analysis"]
+        st.rerun()
+    st.divider()
 
 # --- 2. CONFIG & CONNECTIONS ---
 st.set_page_config(page_title="FIN-CORE AI", layout="wide")
