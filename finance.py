@@ -89,8 +89,8 @@ with st.sidebar:
     st.write(f"Logged in as: `{current_key[:3]}***` ✨")
     
     if st.button("🚪 Logout Total", use_container_width=True):
-            del st.session_state["authenticated"]
-            del st.session_state["user_key"]
+        del st.session_state["authenticated"]
+        del st.session_state["user_key"]
         st.rerun()
     st.divider()
         
