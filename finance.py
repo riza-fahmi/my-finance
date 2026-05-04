@@ -47,9 +47,7 @@ if "user_key" not in st.session_state:
                     st.error("Isi dulu bos kuncinya.")
         
         st.caption("Gunakan Enter untuk konfirmasi cepat.")
-        return False
-    
-    return True
+    return False
 
 if not check_password():
     st.stop()
