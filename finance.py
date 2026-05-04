@@ -27,28 +27,29 @@ def check_password():
 
     # 2. CEK VAULT KEY (Multi-User Space)
     # --- REVISI FORM LOGIN AGAR BISA ENTER ---
-if "user_key" not in st.session_state:
-    empty1, col_login, empty2 = st.columns([1, 1, 1])
-    with col_login:
-        st.markdown("### 🔐 Pilih Vault Anda")
-        
-        # Pake st.form biar tombol 'Buka Vault' otomatis kepencet pas user Enter
-        with st.form("login_form", clear_on_submit=False):
-            pwd = st.text_input("Vault Key", type="password", placeholder="Ketik password...")
+# --- WAJIB ADA BARIS INI ---
+def check_password():
+    if "user_key" not in st.session_state:
+        empty1, col_login, empty2 = st.columns([1, 1, 1])
+        with col_login:
+            st.markdown("### 🔐 Pilih Vault Anda")
             
-            # Button di dalam form harus pake form_submit_button
-            submitted = st.form_submit_button("Buka Vault", use_container_width=True)
+            with st.form("login_form", clear_on_submit=False):
+                pwd = st.text_input("Vault Key", type="password", placeholder="Ketik password...")
+                submitted = st.form_submit_button("Buka Vault", use_container_width=True)
+                
+                if submitted:
+                    if pwd:
+                        st.session_state["user_key"] = pwd
+                        st.rerun()
+                    else:
+                        st.error("Isi dulu bos kuncinya.")
             
-            if submitted:
-                if pwd:
-                    st.session_state["user_key"] = pwd
-                    st.rerun()
-                else:
-                    st.error("Isi dulu bos kuncinya.")
-        
-        st.caption("Gunakan Enter untuk konfirmasi cepat.")
-    return False
+            st.caption("Gunakan Enter untuk konfirmasi cepat.")
+        return False # Sekarang return ini aman karena ada di dalam def
+    return True # Ini juga aman
 
+# --- TRUS JANGAN LUPA DIPANGGIL ---
 if not check_password():
     st.stop()
 
