@@ -28,7 +28,6 @@ def check_password():
     # 2. CEK VAULT KEY (Multi-User Space)
     # --- REVISI FORM LOGIN AGAR BISA ENTER ---
 # --- WAJIB ADA BARIS INI ---
-def check_password():
     if "user_key" not in st.session_state:
         empty1, col_login, empty2 = st.columns([1, 1, 1])
         with col_login:
