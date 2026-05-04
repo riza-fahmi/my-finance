@@ -125,18 +125,18 @@ with st.sidebar:
         
     file = st.file_uploader("Upload Mutasi", type="pdf")
     if file and st.button("🚀 Run AI Audit"):
-    with st.spinner("AI lagi bongkar arsip lama lo..."):
-        # 1. Baca PDF seperti biasa
-        doc = fitz.open(stream=file.read(), filetype="pdf")
-        raw_text = "\n".join([page.get_text() for page in doc])
-        current_data = ai_parse_text(raw_text)
-        st.session_state.df = pd.DataFrame(current_data)
-        
-        # 2. Ambil data terakhir dari Supabase buat pembanding
-        prev_data = get_previous_data(user_key)
-        
-        # 3. Analisa dengan pembanding
-        st.session_state.analysis = ai_analyze_spending(current_data, prev_data)
+        with st.spinner("AI lagi bongkar arsip lama lo..."):
+            # 1. Baca PDF seperti biasa
+            doc = fitz.open(stream=file.read(), filetype="pdf")
+            raw_text = "\n".join([page.get_text() for page in doc])
+            current_data = ai_parse_text(raw_text)
+            st.session_state.df = pd.DataFrame(current_data)
+            
+            # 2. Ambil data terakhir dari Supabase buat pembanding
+            prev_data = get_previous_data(user_key)
+            
+            # 3. Analisa dengan pembanding
+            st.session_state.analysis = ai_analyze_spending(current_data, prev_data)
 
 # --- 5. MAIN UI ---
 tab1, tab2 = st.tabs(["📊 DASHBOARD", "🗄️ RECORDS"])
