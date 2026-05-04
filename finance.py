@@ -26,17 +26,28 @@ def check_password():
         return False
 
     # 2. CEK VAULT KEY (Multi-User Space)
-    if "user_key" not in st.session_state:
-        empty1, col_login, empty2 = st.columns([1, 1, 1])
-        with col_login:
-            st.markdown("### 🔐 Pilih Vault Anda")
-            with st.container(border=True):
-                pwd = st.text_input("Vault Key (Bebas/User)", type="password", placeholder="Contoh: riza123 atau tamu777")
-                if st.button("Buka Vault", use_container_width=True):
+    # --- REVISI FORM LOGIN AGAR BISA ENTER ---
+if "user_key" not in st.session_state:
+    empty1, col_login, empty2 = st.columns([1, 1, 1])
+    with col_login:
+        st.markdown("### 🔐 Pilih Vault Anda")
+        
+        # Pake st.form biar tombol 'Buka Vault' otomatis kepencet pas user Enter
+        with st.form("login_form", clear_on_submit=False):
+            pwd = st.text_input("Vault Key", type="password", placeholder="Ketik password...")
+            
+            # Button di dalam form harus pake form_submit_button
+            submitted = st.form_submit_button("Buka Vault", use_container_width=True)
+            
+            if submitted:
+                if pwd:
                     st.session_state["user_key"] = pwd
                     st.rerun()
-            st.caption("Gunakan key yang sama untuk melihat history Anda kembali.")
-        return False
+                else:
+                    st.error("Isi dulu bos kuncinya.")
+        
+        st.caption("Gunakan Enter untuk konfirmasi cepat.")
+    return False
     
     return True
 
@@ -70,16 +81,34 @@ def ai_parse_text(raw_text):
     response = model.generate_content(prompt)
     return json.loads(response.text.replace('```json', '').replace('```', '').strip())
 
-def ai_analyze_spending(current_list):
+def ai_analyze_spending(current_list, previous_record=None):
+    # Siapkan konteks data lama kalau ada
+    history_context = ""
+    if previous_record:
+        old_data = previous_record[0]['data']
+        old_periode = previous_record[0]['periode']
+        history_context = f"\nBandingkan dengan data bulan lalu ({old_periode}): {old_data}"
+
     prompt = f"""
-    Analisa data ini: {current_list}
+    Tugas: Analisa trend keuangan user.
+    Data Sekarang: {current_list}
+    {history_context}
+
     Berikan:
     1. SKOR_KESEHATAN: (Angka 1-10)
-    2. ANALISA: (Analisa singkat ala IT Auditor santai)
-    3. SARAN: (1 saran konkret)
+    2. ANALISA: (Analisa trend: apakah makin hemat atau makin boros? Apa kategori yang melonjak?)
+    3. PEMBANDING: (Ringkasan singkat perbedaan total pengeluaran bulan ini vs lalu)
+    4. SARAN: (1 saran konkret berdasarkan trend ini)
+    
+    Gunakan gaya bahasa Auditor IT yang santai tapi tajam.
     """
     response = model.generate_content(prompt)
     return response.text
+
+def get_previous_data(user_key, limit=1):
+    # Ambil record terbaru sebelum yang sekarang
+    res = conn.table("vault_finance").select("data, periode").eq("user_key", user_key).order("id", desc=True).limit(limit).execute()
+    return res.data if res.data else None
 
 # --- 4. SIDEBAR ---
 with st.sidebar:
@@ -96,11 +125,18 @@ with st.sidebar:
         
     file = st.file_uploader("Upload Mutasi", type="pdf")
     if file and st.button("🚀 Run AI Audit"):
-        with st.spinner("AI lagi nge-grade keuangan lo..."):
-            doc = fitz.open(stream=file.read(), filetype="pdf")
-            raw_text = "\n".join([page.get_text() for page in doc])
-            st.session_state.df = pd.DataFrame(ai_parse_text(raw_text))
-            st.session_state.analysis = ai_analyze_spending(st.session_state.df.to_dict('records'))
+    with st.spinner("AI lagi bongkar arsip lama lo..."):
+        # 1. Baca PDF seperti biasa
+        doc = fitz.open(stream=file.read(), filetype="pdf")
+        raw_text = "\n".join([page.get_text() for page in doc])
+        current_data = ai_parse_text(raw_text)
+        st.session_state.df = pd.DataFrame(current_data)
+        
+        # 2. Ambil data terakhir dari Supabase buat pembanding
+        prev_data = get_previous_data(user_key)
+        
+        # 3. Analisa dengan pembanding
+        st.session_state.analysis = ai_analyze_spending(current_data, prev_data)
 
 # --- 5. MAIN UI ---
 tab1, tab2 = st.tabs(["📊 DASHBOARD", "🗄️ RECORDS"])
@@ -114,7 +150,7 @@ with tab1:
             score = "N/A"
             for line in st.session_state.analysis.split('\n'):
                 if "SKOR_KESEHATAN" in line: score = line.split(':')[-1].strip()
-            st.metric("Financial Health Score", f"⭐ {score}/10")
+            st.metric("Financial Health Score", f"⭐ {score}")
         
         with col2:
             st.info(st.session_state.analysis)
